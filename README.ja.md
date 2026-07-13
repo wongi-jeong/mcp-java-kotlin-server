@@ -1,5 +1,13 @@
 # MCP PDF 検索サーバー (Java/Kotlin)
 
+[![CI](https://github.com/wongi-jeong/mcp-java-kotlin-server/actions/workflows/ci.yml/badge.svg)](https://github.com/wongi-jeong/mcp-java-kotlin-server/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?logo=kotlin&logoColor=white)
+![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Docker Compose](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)
+![pgvector](https://img.shields.io/badge/pgvector-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-server-black)
+
 PDF をアップロードすると自動で埋め込みを行い、**意味ベースのベクトル検索**を提供する MCP(Model Context Protocol)サーバーです。
 ファイルの入口は MinIO(S3 互換)に一本化されており、バケットに PDF を置くだけで Webhook 経由で自動的にインデックスされます。
 
@@ -64,6 +72,36 @@ MCP クライアント(例: Claude デスクトップ/Cowork コネクター)を
 | `add` | `a`, `b` | 2数の和(接続確認用) |
 
 > ヒント: ドキュメントが日本語なら**日本語で質問**すると精度が最も高くなります。結果が少なければ `min_score` を 0.4〜0.5 に下げ、精度重視なら 0.65〜0.7 に上げてください。
+
+## デモ
+
+サンプル PDF(`pdfs/samples/`)がインデックスされた状態で、MCP クライアントから `pdf_search` を呼び出した例です。
+(スコア・チャンク番号は例示であり、環境により異なります。)
+
+<!-- スクリーンショットを撮ったら docs/demo.png に保存し、下の2行のコメントを解除してください:
+![pdf_search デモ — 日本語クエリに対するハイブリッド検索結果](docs/demo.png)
+*MCP クライアントから `pdf_search` を呼び出し: ハイブリッドで取得したチャンクとスコア・マッチ経路を表示。*
+-->
+
+
+```text
+# 意味 + キーワードのハイブリッド（日本語クエリ）
+pdf_search(query="残業アラートメールは誰に届きますか？", top_k=2)
+
+[pdfs/samples/acme_timetrack_manual_ja.pdf | chunk #0 | score 0.71 | match hybrid]
+受信者の権限が「総務」または「システム」のとき全部門の情報が、
+「所属長」のとき自部門の情報のみが送信されます。
+
+# クロスリンガル（韓国語クエリ → 日本語文書を取得）
+pdf_search(query="야간 근무 시간은 어떻게 집계돼?", top_k=1)
+
+[pdfs/samples/acme_timetrack_manual_ja.pdf | chunk #0 | score 0.63 | match vector]
+設定した開始・終了の間の労働時間を「深夜」時間として集計します。
+
+# 無関係なクエリはカットオフ(min_score)で除外
+pdf_search(query="会社の駐車場ルール", min_score=0.6)
+→ 検索結果がありません。
+```
 
 ## スモークテスト
 

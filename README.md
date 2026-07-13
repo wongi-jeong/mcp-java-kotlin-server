@@ -1,5 +1,13 @@
 # MCP PDF 검색 서버 (Java/Kotlin)
 
+[![CI](https://github.com/wongi-jeong/mcp-java-kotlin-server/actions/workflows/ci.yml/badge.svg)](https://github.com/wongi-jeong/mcp-java-kotlin-server/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?logo=kotlin&logoColor=white)
+![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Docker Compose](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)
+![pgvector](https://img.shields.io/badge/pgvector-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-server-black)
+
 PDF를 업로드하면 자동으로 임베딩해 **의미 기반 벡터 검색**을 제공하는 MCP(Model Context Protocol) 서버입니다.
 파일 진입점은 MinIO(S3 호환)로 단일화되어 있어, 버킷에 PDF를 올리기만 하면 웹훅으로 자동 색인됩니다.
 
@@ -64,6 +72,36 @@ MCP 클라이언트(예: Claude 데스크톱/Cowork 커넥터)를 `http://localh
 | `add` | `a`, `b` | 두 수의 합 (연결 확인용) |
 
 > 팁: 문서가 일본어면 **일본어로 질의**할 때 정확도가 가장 높습니다. 결과가 적으면 `min_score`를 0.4~0.5로 낮추고, 정밀도가 필요하면 0.65~0.7로 올리세요.
+
+## 데모
+
+샘플 PDF(`pdfs/samples/`)가 색인된 상태에서 MCP 클라이언트로 `pdf_search`를 호출한 예시입니다.
+(점수·청크 번호는 예시이며 환경에 따라 달라집니다.)
+
+<!-- 스크린샷을 찍으면 docs/demo.png 로 저장하고 아래 두 줄의 주석을 해제하세요:
+![pdf_search 데모 — 일본어 질의에 대한 하이브리드 검색 결과](docs/demo.png)
+*MCP 클라이언트에서 `pdf_search` 호출: 하이브리드로 회수된 청크와 유사도·매칭 경로가 표시된다.*
+-->
+
+
+```text
+# 의미 + 키워드 하이브리드 (일본어 질의)
+pdf_search(query="残業アラートメールは誰に届きますか？", top_k=2)
+
+[pdfs/samples/acme_timetrack_manual_ja.pdf | 청크 #0 | 유사도 0.71 | 매칭 hybrid]
+受信者の権限が「総務」または「システム」のとき全部門の情報が、
+「所属長」のとき自部門の情報のみが送信されます。
+
+# 교차 언어 (한국어 질의 → 일본어 문서 회수)
+pdf_search(query="야간 근무 시간은 어떻게 집계돼?", top_k=1)
+
+[pdfs/samples/acme_timetrack_manual_ja.pdf | 청크 #0 | 유사도 0.63 | 매칭 vector]
+設定した開始・終了の間の労働時間を「深夜」時間として集計します。
+
+# 무관한 질의는 컷오프(min_score)로 제외
+pdf_search(query="회사 주차장 이용 규정", min_score=0.6)
+→ 검색 결과가 없습니다.
+```
 
 ## 스모크 테스트
 
