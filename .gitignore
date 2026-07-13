@@ -1,0 +1,62 @@
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+.kotlin
+
+### IntelliJ IDEA ###
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/compiler.xml
+.idea/libraries/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### Environment / secrets ###
+.env
+.env.*
+!.env.example
+
+### Runtime logs / artifacts ###
+*.log
+
+### PDFs: 공개 저장소에는 합성 샘플(pdfs/samples/)만 추적한다.
+### 로컬의 실제/기밀 문서(회사·고객 자료)는 커밋되지 않도록 pdfs/ 하위를 무시한다.
+/pdfs/*
+!/pdfs/samples/
+
+### IntelliJ IDEA — 전체 무시 (workspace.xml 등에 사용자명·로컬 경로 유출 방지) ###
+.idea/
+
+### Claude Code 로컬 설정 (개인/머신 전용: 절대경로·허용목록) ###
+.claude/settings.local.json

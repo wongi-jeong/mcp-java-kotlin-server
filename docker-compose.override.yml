@@ -1,0 +1,18 @@
+# 로컬 개발/검증용 오버라이드 — docker compose가 자동으로 병합한다.
+# 실제 도메인 없이 localhost로 "업로드→임베딩 / 삭제→정리" 파이프라인을 확인하는 용도.
+#
+# 사용법(caddy는 로컬에선 띄우지 않는다):
+#   docker compose up -d --build pgvector ollama minio minio-init mcp-server
+#
+# 운영 배포 시에는 이 파일을 사용하지 않거나 제거한다(아래 -f 로 명시 가능):
+#   docker compose -f docker-compose.yml up -d --build
+services:
+  minio:
+    # 로컬 접근용으로 9000/9001을 루프백(127.0.0.1)에만 노출
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API
+      - "127.0.0.1:9001:9001"   # 웹 콘솔
+    environment:
+      # presigned/콘솔 주소를 localhost로 덮어쓴다 (도메인 불필요)
+      MINIO_SERVER_URL: http://localhost:9000
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001

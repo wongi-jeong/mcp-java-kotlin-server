@@ -1,0 +1,17 @@
+# Caddy 리버스 프록시 — 실제 도메인으로 자동 HTTPS(Let's Encrypt) 발급.
+# MinIO 9000/9001 포트는 호스트에 노출하지 않고, 이 프록시만 외부 진입점으로 둔다.
+# 도메인은 docker-compose의 환경변수(.env)에서 주입된다.
+#
+# 전제: 공인 DNS A 레코드가 이 호스트를 가리키고, 80/443이 외부에서 열려 있어야
+#       Let's Encrypt 인증서가 자동 발급된다. (사설/로컬 도메인이면 internal TLS 사용)
+
+# S3 API
+{$MINIO_API_DOMAIN} {
+	# 대용량 PDF 업로드를 위해 본문 크기 제한 없음(Caddy 기본)
+	reverse_proxy minio:9000
+}
+
+# 웹 콘솔
+{$MINIO_CONSOLE_DOMAIN} {
+	reverse_proxy minio:9001
+}

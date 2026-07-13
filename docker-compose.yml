@@ -1,0 +1,141 @@
+services:
+
+  pgvector:
+    image: pgvector/pgvector:pg17
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: mcpdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # S3 호환 파일 서버: 외부 리소스(PDF) 업로드/수정의 단일 진입점
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    # 운영 하드닝: 9000/9001을 호스트로 publish 하지 않는다.
+    # 외부 접근은 Caddy(TLS) 리버스 프록시만 경유하고, compose 네트워크 내부에서만 직접 접근한다.
+    expose:
+      - "9000"   # S3 API (내부 전용)
+      - "9001"   # 웹 콘솔 (내부 전용)
+    environment:
+      # root 계정은 관리(부트스트랩) 전용. 애플리케이션은 아래 스코프 서비스 계정을 사용한다.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+      # presigned/share URL의 호스트를 실제 도메인(Caddy 경유)으로 고정한다.
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL:?set MINIO_SERVER_URL in .env}
+      # 콘솔 리다이렉트도 실제 도메인으로
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:?set MINIO_BROWSER_REDIRECT_URL in .env}
+      # ── 버킷 알림(웹훅): 업로드 시 mcp-server로 이벤트 POST → 자동 임베딩 ──
+      MINIO_NOTIFY_WEBHOOK_ENABLE_PDFINGEST: "on"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_PDFINGEST: "http://mcp-server:3001/minio/events"
+      # queue_dir: 엔드포인트가 잠시 오프라인(예: mcp-server 기동 전)이어도
+      # MinIO가 정상 기동하고 이벤트를 디스크에 쌓아 재전송하도록 한다.
+      MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_PDFINGEST: /data/.minio-events
+      MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT_PDFINGEST: "1000"
+    volumes:
+      - minio_data:/data
+
+  # 외부 TLS 종단 + 리버스 프록시. 실제 도메인으로 자동 HTTPS(Let's Encrypt) 발급.
+  # S3 API와 콘솔을 각각 별도 서브도메인으로 노출하고, MinIO 포트는 내부에만 둔다.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MINIO_API_DOMAIN: ${MINIO_API_DOMAIN:?set MINIO_API_DOMAIN in .env}
+      MINIO_CONSOLE_DOMAIN: ${MINIO_CONSOLE_DOMAIN:?set MINIO_CONSOLE_DOMAIN in .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      minio:
+        condition: service_started
+
+  # 최초 기동 시 pdfs 버킷 생성 + 스코프 서비스 계정/정책 프로비저닝 (1회성)
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      MINIO_READONLY_KEY: ${MINIO_READONLY_KEY:?}
+      MINIO_READONLY_SECRET: ${MINIO_READONLY_SECRET:?}
+      MINIO_UPLOAD_KEY: ${MINIO_UPLOAD_KEY:?}
+      MINIO_UPLOAD_SECRET: ${MINIO_UPLOAD_SECRET:?}
+    volumes:
+      - ./minio/provision.sh:/provision.sh:ro
+    entrypoint: ["/bin/sh", "/provision.sh"]
+
+  ollama:
+    image: ollama/ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: "-1"      # 모델을 메모리에 상주시켜 cold start 제거
+      OLLAMA_NUM_PARALLEL: "1"     # CPU 추론에서는 병렬 요청이 코어 경쟁을 일으켜 직렬이 유리
+    volumes:
+      - ollama_data:/root/.ollama
+    # 서버 기동 후 모델 자동 pull (볼륨에 이미 있으면 즉시 skip). 모델명은 OLLAMA_MODEL로 교체 가능
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 3 && ollama pull ${OLLAMA_MODEL:-nomic-embed-text} && wait"]
+    healthcheck:
+      # 모델 다운로드 완료 여부로 ready 판단
+      test: ["CMD-SHELL", "ollama list 2>/dev/null | grep -q ${OLLAMA_MODEL:-nomic-embed-text}"]
+      interval: 10s
+      timeout: 10s
+      retries: 60      # 최대 10분 대기 (초기 모델 다운로드 ~274MB)
+      start_period: 10s
+    # ── GPU 가속 (NVIDIA GPU + WSL2 CUDA 설정 필요) ──────────────────────
+    # 이 환경은 GPU 미인식(CPU 추론)이라 비활성화함. NVIDIA GPU를 WSL2에서
+    # 사용할 수 있게 되면 아래 주석을 해제하세요.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  mcp-server:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-nomic-embed-text}
+      # 임베딩 차원 (모델 교체 시 함께 변경, DB 볼륨 초기화 필요): nomic=768, all-minilm=384
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+      DB_URL: jdbc:postgresql://pgvector:5432/mcpdb
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      # 웹훅으로 받은 객체를 자격증명으로 직접 다운로드 (버킷 private 유지).
+      # 내부 네트워크에서는 minio:9000로 직접 접근하고, 읽기 전용 서비스 계정만 사용한다.
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_READONLY_KEY:?set MINIO_READONLY_KEY in .env}
+      MINIO_SECRET_KEY: ${MINIO_READONLY_SECRET:?set MINIO_READONLY_SECRET in .env}
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  pgvector_data:
+  ollama_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,12 @@
+# 일관된 줄바꿈(LF) + 바이너리 표시
+* text=auto eol=lf
+
+# 셸/그래들 래퍼는 항상 LF
+*.sh text eol=lf
+gradlew text eol=lf
+
+# 바이너리 파일 (diff/줄바꿈 변환 금지)
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jar binary
