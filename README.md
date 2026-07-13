@@ -76,12 +76,14 @@ MCP 클라이언트(예: Claude 데스크톱/Cowork 커넥터)를 `http://localh
 ## 데모
 
 샘플 PDF(`pdfs/samples/`)가 색인된 상태에서 MCP 클라이언트로 `pdf_search`를 호출한 예시입니다.
-(점수·청크 번호는 예시이며 환경에 따라 달라집니다.)
 
-<!-- 스크린샷을 찍으면 docs/demo.png 로 저장하고 아래 두 줄의 주석을 해제하세요:
-![pdf_search 데모 — 일본어 질의에 대한 하이브리드 검색 결과](docs/demo.png)
-*MCP 클라이언트에서 `pdf_search` 호출: 하이브리드로 회수된 청크와 유사도·매칭 경로가 표시된다.*
--->
+![pdf_search 도구 호출](docs/demo-1.png)
+*① MCP 클라이언트가 `pdf_search`를 호출 — 질의와 top_k 파라미터.*
+
+![검색 결과 기반 응답](docs/demo-2.png)
+*② 검색된 청크로 답변 — 출처·유사도·매칭 경로(hybrid) 표시.*
+
+아래는 텍스트로 본 검색 예시입니다. (점수·청크 번호는 예시이며 환경에 따라 달라집니다.)
 
 
 ```text

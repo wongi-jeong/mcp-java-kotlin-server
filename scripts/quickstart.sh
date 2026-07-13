@@ -50,24 +50,48 @@ docker compose up -d --build pgvector ollama minio minio-init mcp-server
 # 4) 샘플 PDF 업로드 → pdfs 버킷 (업로더 서비스 계정 사용)
 #    합성 샘플(pdfs/samples/)만 사용한다. 로컬의 실제 문서로 테스트하려면
 #    MinIO 콘솔이나 mc 로 직접 pdfs 버킷에 올리면 된다.
+upload_ok=0
 if ls pdfs/samples/*.pdf >/dev/null 2>&1; then
   info "샘플 PDF 업로드 → pdfs 버킷 (업로드 즉시 웹훅으로 자동 임베딩)"
-  docker compose run --rm -T \
-    -v "$(pwd)/pdfs/samples:/samples:ro" \
-    --entrypoint /bin/sh minio-init -c '
-      until mc alias set local http://minio:9000 "$MINIO_UPLOAD_KEY" "$MINIO_UPLOAD_SECRET" >/dev/null 2>&1; do sleep 2; done
-      for f in /samples/*.pdf; do
-        [ -e "$f" ] || continue
-        echo "  업로드: $(basename "$f")"
-        mc cp "$f" "local/pdfs/samples/$(basename "$f")" >/dev/null
-      done
-    '
+  # Docker가 인식하는 호스트 경로. Windows Git Bash는 /c/... 대신 C:/... 형태가 필요하다.
+  host_samples="$(pwd)/pdfs/samples"
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) host_samples="$(pwd -W)/pdfs/samples" ;;
+  esac
+  # MSYS_NO_PATHCONV / MSYS2_ARG_CONV_EXCL: Git Bash가 /bin/sh·/samples 등을
+  # 윈도우 경로로 자동 변환("C:/Program..." 오류)하는 것을 막는다. 비-Windows에선 무해.
+  if MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker compose run --rm -T \
+      -v "${host_samples}:/samples:ro" \
+      --entrypoint /bin/sh minio-init -c '
+        # root 자격으로 버킷·웹훅 이벤트 보장 (이미 있으면 무시). 등록 누락 시 임베딩이 안 되는 문제를 원천 차단.
+        until mc alias set admin http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do sleep 2; done
+        mc mb --ignore-existing admin/pdfs >/dev/null 2>&1 || true
+        mc event add --ignore-existing admin/pdfs arn:minio:sqs::PDFINGEST:webhook --event put,delete >/dev/null 2>&1 || true
+        # 업로더 계정으로 업로드 (PUT → 웹훅 발생 → 자동 임베딩)
+        mc alias set local http://minio:9000 "$MINIO_UPLOAD_KEY" "$MINIO_UPLOAD_SECRET" >/dev/null 2>&1
+        for f in /samples/*.pdf; do
+          [ -e "$f" ] || continue
+          echo "  업로드: $(basename "$f")"
+          mc cp "$f" "local/pdfs/samples/$(basename "$f")" >/dev/null
+        done
+      '; then
+    upload_ok=1
+  else
+    echo
+    info "자동 업로드 실패 (주로 Windows 경로 변환 이슈). 스크립트는 계속 진행합니다."
+    echo "     → MinIO 콘솔에서 직접 올려주세요: http://localhost:9001 → pdfs 버킷 → pdfs/samples/*.pdf"
+    echo "       (ID: minioadmin / PW: .env의 MINIO_ROOT_PASSWORD)"
+  fi
 else
-  info "pdfs/ 에 샘플 PDF가 없어 업로드 생략 (MinIO 콘솔에서 직접 올리면 됩니다)"
+  info "pdfs/samples/ 에 샘플 PDF가 없어 업로드 생략 (MinIO 콘솔에서 직접 올리면 됩니다)"
 fi
 
-# 5) 스모크 테스트
-bash scripts/smoke_test.sh
+# 5) 스모크 테스트 (자동 업로드가 성공했을 때만 자동 실행)
+if [ "$upload_ok" = "1" ]; then
+  bash scripts/smoke_test.sh
+else
+  info "수동 업로드 후 확인하려면:  bash scripts/smoke_test.sh"
+fi
 
 info "완료 🎉"
 echo
