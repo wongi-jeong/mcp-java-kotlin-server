@@ -8,6 +8,8 @@
 ![pgvector](https://img.shields.io/badge/pgvector-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-server-black)
 
+📅 **2026.06** (약 3주)  ·  👤 **개인 프로젝트**
+
 PDF를 업로드하면 자동으로 임베딩해 **의미 기반 벡터 검색**을 제공하는 MCP(Model Context Protocol) 서버입니다.
 파일 진입점은 MinIO(S3 호환)로 단일화되어 있어, 버킷에 PDF를 올리기만 하면 웹훅으로 자동 색인됩니다.
 

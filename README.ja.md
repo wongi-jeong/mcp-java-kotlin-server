@@ -8,6 +8,8 @@
 ![pgvector](https://img.shields.io/badge/pgvector-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
 ![MCP](https://img.shields.io/badge/MCP-server-black)
 
+📅 **2026.06**（約3週間）  ·  👤 **個人プロジェクト**
+
 PDF をアップロードすると自動で埋め込みを行い、**意味ベースのベクトル検索**を提供する MCP(Model Context Protocol)サーバーです。
 ファイルの入口は MinIO(S3 互換)に一本化されており、バケットに PDF を置くだけで Webhook 経由で自動的にインデックスされます。
 
